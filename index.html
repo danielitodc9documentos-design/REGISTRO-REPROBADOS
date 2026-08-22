@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Registro de Dificultades Académicas y Conductuales</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --azul:#1e3a5f;
@@ -175,7 +176,7 @@
    CONFIGURACIÓN — reemplaza esta URL por la de tu implementación
    de Apps Script (Implementar > Nueva implementación > Aplicación web)
    ============================================================ */
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx608J7xkOYjFYvPXRQg7dC4f3nXdkpAm-a4b5Al5F2MSmkfeh8TAZUUSyXaPTuBo97Gw/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
 
 let registrosActuales = [];
 let docenteActivo = '';
@@ -341,68 +342,82 @@ async function guardarTodos() {
   }
 }
 
-// -------- Exportar PDF --------
+// -------- Exportar PDF (formato tabla, tipo hoja de cálculo) --------
 function exportarPDF() {
   // Antes de exportar, aseguramos que lo escrito en pantalla esté en memoria
   registrosActuales.forEach((r, i) => Object.assign(r, leerCamposDelDom(i)));
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margen = 40;
-  let y = margen;
-  const anchoUtil = 595 - margen * 2;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
+  const margen = 28;
 
-  doc.setFontSize(14);
-  doc.setFont(undefined, 'bold');
-  doc.text('Registro de Dificultades Académicas y Conductuales', margen, y);
-  y += 20;
-  doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
-  doc.text('Docente: ' + docenteActivo, margen, y);
-  y += 14;
-  doc.text('Fecha de exportación: ' + new Date().toLocaleDateString('es-BO'), margen, y);
-  y += 24;
+  const columnas = [
+    'Curso', 'Estudiante', 'Asignatura', 'Mat.Rep', '2T', '1T', 'Reinc.',
+    'Dificultad académica', 'Acciones (dificultad)', 'Recomendaciones',
+    'Situación conductual', 'Acciones (conducta)', 'Observaciones'
+  ];
 
-  registrosActuales.forEach((r, idx) => {
-    const bloques = [
-      ['Estudiante', `${r.estudiante}  (${r.curso})`],
-      ['Asignatura', `${r.asignatura}  |  Nota 2T: ${r.nota2T ?? '-'}  |  Nota 1T: ${r.nota1T ?? '-'}`],
-      ['Dificultad académica identificada', r.dificultad || '-'],
-      ['Acciones ante la dificultad', r.accionesDificultad || '-'],
-      ['Recomendaciones', r.recomendaciones || '-'],
-      ['Situación conductual', r.situacionConductual || '-'],
-      ['Acciones ante la conducta', r.accionesConducta || '-'],
-      ['Observaciones', r.observaciones || '-']
-    ];
+  const filas = registrosActuales.map(r => ([
+    r.curso ?? '-',
+    r.estudiante ?? '-',
+    r.asignatura ?? '-',
+    r.matRep ?? '-',
+    r.nota2T ?? '-',
+    r.nota1T ?? '-',
+    r.reincide ?? '-',
+    r.dificultad || '-',
+    r.accionesDificultad || '-',
+    r.recomendaciones || '-',
+    r.situacionConductual || '-',
+    r.accionesConducta || '-',
+    r.observaciones || '-'
+  ]));
 
-    // Calcular alto estimado del bloque para saber si hay que saltar página
-    let alturaEstim = 10;
-    bloques.forEach(([, texto]) => {
-      const lineas = doc.splitTextToSize(String(texto), anchoUtil);
-      alturaEstim += 14 + lineas.length * 12;
-    });
-
-    if (y + alturaEstim > 800) {
-      doc.addPage();
-      y = margen;
-    }
-
-    doc.setDrawColor(200);
-    doc.line(margen, y, margen + anchoUtil, y);
-    y += 14;
-
-    bloques.forEach(([titulo, texto]) => {
+  doc.autoTable({
+    head: [columnas],
+    body: filas,
+    margin: { left: margen, right: margen, top: 58 },
+    styles: {
+      font: 'helvetica',
+      fontSize: 7,
+      cellPadding: 3,
+      valign: 'top',
+      overflow: 'linebreak',
+      lineColor: [216, 222, 229],
+      lineWidth: 0.5
+    },
+    headStyles: {
+      fillColor: [30, 58, 95],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 7.5,
+      halign: 'center'
+    },
+    alternateRowStyles: { fillColor: [244, 246, 248] },
+    columnStyles: {
+      0: { cellWidth: 28, halign: 'center' },   // Curso
+      1: { cellWidth: 72 },                     // Estudiante
+      2: { cellWidth: 55 },                     // Asignatura
+      3: { cellWidth: 22, halign: 'center' },   // Mat.Rep
+      4: { cellWidth: 20, halign: 'center' },   // 2T
+      5: { cellWidth: 20, halign: 'center' },   // 1T
+      6: { cellWidth: 24, halign: 'center' }    // Reincide
+      // columnas de texto (7 a 12) se reparten automáticamente el ancho restante
+    },
+    didDrawPage: function () {
+      doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
-      doc.setFontSize(10);
-      doc.text(titulo + ':', margen, y);
-      y += 13;
+      doc.setTextColor(30, 58, 95);
+      doc.text('Registro de Dificultades Académicas y Conductuales', margen, 24);
+      doc.setFontSize(9);
       doc.setFont(undefined, 'normal');
-      const lineas = doc.splitTextToSize(String(texto), anchoUtil);
-      doc.text(lineas, margen, y);
-      y += lineas.length * 12 + 6;
-    });
+      doc.setTextColor(90, 107, 122);
+      doc.text('Docente: ' + docenteActivo + '   •   Exportado: ' + new Date().toLocaleDateString('es-BO'), margen, 40);
 
-    y += 10;
+      const pagina = doc.internal.getCurrentPageInfo().pageNumber;
+      doc.setFontSize(8);
+      doc.text('Página ' + pagina, doc.internal.pageSize.getWidth() - margen - 40, doc.internal.pageSize.getHeight() - 12);
+    }
   });
 
   const nombreArchivo = 'Registro_' + docenteActivo.replace(/\s+/g, '_') + '.pdf';
