@@ -144,6 +144,9 @@
     <select id="selectDocente">
       <option value="">Cargando lista de docentes...</option>
     </select>
+    <label for="inputClave">Contraseña</label>
+    <input type="password" id="inputClave" inputmode="numeric" placeholder="Ingresa tu contraseña numérica">
+    <div id="errorLogin" class="estado error"></div>
     <div style="margin-top:14px;">
       <button class="btn" id="btnContinuar" onclick="cargarRegistros()" disabled>Continuar</button>
     </div>
@@ -185,6 +188,7 @@ const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx608J7xkOYjFYvPXRQ
 
 let registrosActuales = [];
 let docenteActivo = '';
+let claveActiva = '';
 
 // -------- Utilidades de red --------
 async function apiGet(params) {
@@ -214,27 +218,43 @@ async function cargarDocentes() {
   }
 }
 
-document.getElementById('selectDocente').addEventListener('change', function () {
-  document.getElementById('btnContinuar').disabled = !this.value;
-});
+document.getElementById('selectDocente').addEventListener('change', actualizarBotonContinuar);
+document.getElementById('inputClave').addEventListener('input', actualizarBotonContinuar);
+
+function actualizarBotonContinuar() {
+  const docente = document.getElementById('selectDocente').value;
+  const clave = document.getElementById('inputClave').value.trim();
+  document.getElementById('btnContinuar').disabled = !(docente && clave);
+}
 
 function volverASeleccion() {
   document.getElementById('pasoDocente').classList.remove('oculto');
   document.getElementById('pasoRegistros').classList.add('oculto');
   document.getElementById('btnCambiarDocente').classList.add('oculto');
+  document.getElementById('inputClave').value = '';
+  document.getElementById('errorLogin').textContent = '';
+  claveActiva = '';
 }
 
 // -------- Paso 2: cargar registros del docente --------
 async function cargarRegistros() {
   const select = document.getElementById('selectDocente');
   docenteActivo = select.value;
-  if (!docenteActivo) return;
+  const clave = document.getElementById('inputClave').value.trim();
+  const errorEl = document.getElementById('errorLogin');
+  errorEl.textContent = '';
+  if (!docenteActivo || !clave) return;
 
   document.getElementById('pasoDocente').classList.add('oculto');
   document.getElementById('cargando').classList.remove('oculto');
 
   try {
-    registrosActuales = await apiGet({ action: 'registros', docente: docenteActivo });
+    const resp = await apiGet({ action: 'registros', docente: docenteActivo, clave: clave });
+    if (resp && resp.error) {
+      throw new Error(resp.error);
+    }
+    registrosActuales = resp;
+    claveActiva = clave;
     renderRegistros();
     document.getElementById('pasoRegistros').classList.remove('oculto');
     document.getElementById('btnCambiarDocente').classList.remove('oculto');
@@ -242,8 +262,10 @@ async function cargarRegistros() {
     document.getElementById('conteoRegistros').textContent =
       registrosActuales.length + ' registro(s) asignado(s)';
   } catch (err) {
-    alert('No se pudo cargar la información. Revisa tu conexión o la URL del backend.');
-    volverASeleccion();
+    document.getElementById('pasoDocente').classList.remove('oculto');
+    errorEl.textContent = err.message === 'Clave incorrecta'
+      ? 'Contraseña incorrecta.'
+      : 'No se pudo cargar la información. Revisa tu conexión.';
   } finally {
     document.getElementById('cargando').classList.add('oculto');
   }
@@ -320,6 +342,7 @@ async function guardarRegistro(i) {
     const resp = await apiPost({
       row: r.row,
       docente: docenteActivo,
+      clave: claveActiva,
       ...campos
     });
     if (resp.error) throw new Error(resp.error);
