@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro de Dificultades Académicas y Conductuales</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{
+    --azul:#1e3a5f;
+    --azul-claro:#2d5a8c;
+    --gris-bg:#f4f6f8;
+    --borde:#d8dee5;
+    --verde:#2e8b57;
+    --rojo:#c0392b;
+    --texto:#26313d;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI', Arial, sans-serif;
+    background:var(--gris-bg);
+    color:var(--texto);
+  }
+  header{
+    background:var(--azul);
+    color:#fff;
+    padding:18px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  header h1{ font-size:1.15rem; margin:0; font-weight:600; }
+  header .sub{ font-size:.8rem; opacity:.85; }
+  main{ max-width:960px; margin:0 auto; padding:20px 16px 60px; }
+
+  .card{
+    background:#fff;
+    border:1px solid var(--borde);
+    border-radius:10px;
+    padding:20px;
+    margin-bottom:18px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
+  }
+
+  select, textarea, input{
+    width:100%;
+    font-family:inherit;
+    font-size:.95rem;
+    padding:9px 10px;
+    border:1px solid var(--borde);
+    border-radius:6px;
+    background:#fff;
+    color:var(--texto);
+  }
+  select{ cursor:pointer; }
+  textarea{ resize:vertical; min-height:60px; }
+
+  label{ display:block; font-size:.78rem; font-weight:600; color:#5a6b7a; margin:10px 0 4px; text-transform:uppercase; letter-spacing:.03em; }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--azul-claro);
+    color:#fff;
+    border:none;
+    padding:9px 16px;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:.9rem;
+    font-weight:600;
+  }
+  .btn:hover{ background:var(--azul); }
+  .btn.secundario{ background:#fff; color:var(--azul-claro); border:1px solid var(--azul-claro); }
+  .btn.secundario:hover{ background:#eaf1f8; }
+  .btn.pdf{ background:var(--rojo); }
+  .btn.pdf:hover{ background:#992d22; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:14px; }
+
+  .registro{
+    border:1px solid var(--borde);
+    border-radius:8px;
+    margin-bottom:14px;
+    overflow:hidden;
+  }
+  .registro-head{
+    background:#eef2f6;
+    padding:10px 14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:6px;
+    font-size:.88rem;
+  }
+  .registro-head .nombre{ font-weight:700; color:var(--azul); }
+  .registro-head .datos{ color:#5a6b7a; font-size:.8rem; }
+  .registro-body{ padding:14px; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+  @media (max-width:640px){ .grid2{ grid-template-columns:1fr; } }
+
+  .estado{ font-size:.78rem; margin-top:8px; min-height:16px; }
+  .estado.ok{ color:var(--verde); }
+  .estado.error{ color:var(--rojo); }
+
+  .badge{
+    display:inline-block;
+    font-size:.7rem;
+    padding:2px 8px;
+    border-radius:20px;
+    background:#fde8e8;
+    color:var(--rojo);
+    font-weight:600;
+  }
+  .badge.completo{ background:#e3f4ea; color:var(--verde); }
+
+  .oculto{ display:none !important; }
+  .cargando{ text-align:center; padding:40px 0; color:#5a6b7a; }
+  .vacio{ text-align:center; padding:30px; color:#5a6b7a; }
+  footer{ text-align:center; padding:20px; font-size:.75rem; color:#8494a3; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Registro de Dificultades Académicas y Conductuales</h1>
+    <div class="sub">Selecciona tu nombre para ver y completar tus registros</div>
+  </div>
+  <button class="btn secundario oculto" id="btnCambiarDocente" onclick="volverASeleccion()">Cambiar docente</button>
+</header>
+
+<main>
+
+  <!-- PASO 1: Selección de docente -->
+  <section id="pasoDocente" class="card">
+    <label for="selectDocente">Docente</label>
+    <select id="selectDocente">
+      <option value="">Cargando lista de docentes...</option>
+    </select>
+    <div style="margin-top:14px;">
+      <button class="btn" id="btnContinuar" onclick="cargarRegistros()" disabled>Continuar</button>
+    </div>
+  </section>
+
+  <!-- PASO 2: Formulario de registros -->
+  <section id="pasoRegistros" class="oculto">
+    <div class="toolbar">
+      <div>
+        <strong id="nombreDocenteActivo"></strong>
+        <div style="font-size:.8rem;color:#5a6b7a;" id="conteoRegistros"></div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn secundario" onclick="guardarTodos()">Guardar todo</button>
+        <button class="btn pdf" onclick="exportarPDF()">Exportar PDF</button>
+      </div>
+    </div>
+
+    <div id="listaRegistros"></div>
+  </section>
+
+  <div id="cargando" class="cargando oculto">Cargando datos...</div>
+
+</main>
+
+<footer>
+  Los datos se guardan directamente en la planilla del colegio.
+  <div style="margin-top:6px;">
+    <a href="#" onclick="exportarTodoAdmin(); return false;" style="color:#8494a3;">Exportar todo (Admin)</a>
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN — reemplaza esta URL por la de tu implementación
+   de Apps Script (Implementar > Nueva implementación > Aplicación web)
+   ============================================================ */
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx608J7xkOYjFYvPXRQg7dC4f3nXdkpAm-a4b5Al5F2MSmkfeh8TAZUUSyXaPTuBo97Gw/exec';
+
+let registrosActuales = [];
+let docenteActivo = '';
+
+// -------- Utilidades de red --------
+async function apiGet(params) {
+  const url = new URL(WEB_APP_URL);
+  Object.keys(params).forEach(k => url.searchParams.set(k, params[k]));
+  const resp = await fetch(url.toString());
+  return resp.json();
+}
+
+async function apiPost(data) {
+  const body = new URLSearchParams(data);
+  const resp = await fetch(WEB_APP_URL, { method: 'POST', body });
+  return resp.json();
+}
+
+// -------- Paso 1: cargar docentes --------
+async function cargarDocentes() {
+  const select = document.getElementById('selectDocente');
+  try {
+    const docentes = await apiGet({ action: 'docentes' });
+    select.innerHTML = '<option value="">-- Selecciona tu nombre --</option>' +
+      docentes.map(d => `<option value="${escaparHtml(d)}">${escaparHtml(d)}</option>`).join('');
+    select.disabled = false;
+    document.getElementById('btnContinuar').disabled = false;
+  } catch (err) {
+    select.innerHTML = '<option>Error al cargar. Revisa la URL del backend.</option>';
+  }
+}
+
+document.getElementById('selectDocente').addEventListener('change', function () {
+  document.getElementById('btnContinuar').disabled = !this.value;
+});
+
+function volverASeleccion() {
+  document.getElementById('pasoDocente').classList.remove('oculto');
+  document.getElementById('pasoRegistros').classList.add('oculto');
+  document.getElementById('btnCambiarDocente').classList.add('oculto');
+}
+
+// -------- Paso 2: cargar registros del docente --------
+async function cargarRegistros() {
+  const select = document.getElementById('selectDocente');
+  docenteActivo = select.value;
+  if (!docenteActivo) return;
+
+  document.getElementById('pasoDocente').classList.add('oculto');
+  document.getElementById('cargando').classList.remove('oculto');
+
+  try {
+    registrosActuales = await apiGet({ action: 'registros', docente: docenteActivo });
+    renderRegistros();
+    document.getElementById('pasoRegistros').classList.remove('oculto');
+    document.getElementById('btnCambiarDocente').classList.remove('oculto');
+    document.getElementById('nombreDocenteActivo').textContent = docenteActivo;
+    document.getElementById('conteoRegistros').textContent =
+      registrosActuales.length + ' registro(s) asignado(s)';
+  } catch (err) {
+    alert('No se pudo cargar la información. Revisa tu conexión o la URL del backend.');
+    volverASeleccion();
+  } finally {
+    document.getElementById('cargando').classList.add('oculto');
+  }
+}
+
+function renderRegistros() {
+  const cont = document.getElementById('listaRegistros');
+  if (registrosActuales.length === 0) {
+    cont.innerHTML = '<div class="vacio">No se encontraron registros para este docente.</div>';
+    return;
+  }
+
+  cont.innerHTML = registrosActuales.map((r, i) => {
+    const completo = r.dificultad || r.situacionConductual;
+    return `
+    <div class="registro" data-idx="${i}">
+      <div class="registro-head">
+        <div>
+          <span class="nombre">${escaparHtml(r.estudiante)}</span>
+          <span class="badge ${completo ? 'completo' : ''}">${completo ? 'Completado' : 'Pendiente'}</span>
+        </div>
+        <div class="datos">${escaparHtml(r.curso)} · ${escaparHtml(r.asignatura)} · Nota 2T: ${r.nota2T ?? '-'}</div>
+      </div>
+      <div class="registro-body">
+        <div class="grid2">
+          <div>
+            <label>Dificultad académica identificada</label>
+            <textarea data-campo="dificultad" oninput="marcarCambio(${i})">${escaparHtml(r.dificultad)}</textarea>
+            <label>Acciones ante la dificultad</label>
+            <textarea data-campo="accionesDificultad" oninput="marcarCambio(${i})">${escaparHtml(r.accionesDificultad)}</textarea>
+            <label>Recomendaciones</label>
+            <textarea data-campo="recomendaciones" oninput="marcarCambio(${i})">${escaparHtml(r.recomendaciones)}</textarea>
+          </div>
+          <div>
+            <label>Situación conductual</label>
+            <textarea data-campo="situacionConductual" oninput="marcarCambio(${i})">${escaparHtml(r.situacionConductual)}</textarea>
+            <label>Acciones ante la conducta</label>
+            <textarea data-campo="accionesConducta" oninput="marcarCambio(${i})">${escaparHtml(r.accionesConducta)}</textarea>
+            <label>Observaciones</label>
+            <textarea data-campo="observaciones" oninput="marcarCambio(${i})">${escaparHtml(r.observaciones)}</textarea>
+          </div>
+        </div>
+        <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+          <button class="btn" onclick="guardarRegistro(${i})">Guardar este registro</button>
+          <span class="estado" id="estado-${i}"></span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function marcarCambio(i) {
+  const el = document.getElementById('estado-' + i);
+  if (el) { el.textContent = 'Cambios sin guardar'; el.className = 'estado'; }
+}
+
+function leerCamposDelDom(i) {
+  const nodo = document.querySelector(`.registro[data-idx="${i}"]`);
+  const campos = {};
+  nodo.querySelectorAll('textarea[data-campo]').forEach(t => {
+    campos[t.dataset.campo] = t.value.trim();
+  });
+  return campos;
+}
+
+async function guardarRegistro(i) {
+  const r = registrosActuales[i];
+  const campos = leerCamposDelDom(i);
+  const estadoEl = document.getElementById('estado-' + i);
+  estadoEl.textContent = 'Guardando...';
+  estadoEl.className = 'estado';
+
+  try {
+    const resp = await apiPost({
+      row: r.row,
+      docente: docenteActivo,
+      ...campos
+    });
+    if (resp.error) throw new Error(resp.error);
+    Object.assign(r, campos);
+    estadoEl.textContent = 'Guardado ✓';
+    estadoEl.className = 'estado ok';
+    actualizarBadge(i);
+  } catch (err) {
+    estadoEl.textContent = 'Error al guardar: ' + err.message;
+    estadoEl.className = 'estado error';
+  }
+}
+
+function actualizarBadge(i) {
+  const nodo = document.querySelector(`.registro[data-idx="${i}"] .badge`);
+  const r = registrosActuales[i];
+  const completo = r.dificultad || r.situacionConductual;
+  nodo.textContent = completo ? 'Completado' : 'Pendiente';
+  nodo.className = 'badge' + (completo ? ' completo' : '');
+}
+
+async function guardarTodos() {
+  for (let i = 0; i < registrosActuales.length; i++) {
+    await guardarRegistro(i);
+  }
+}
+
+// -------- Exportar PDF (formato tabla, tipo hoja de cálculo) --------
+function exportarPDF() {
+  // Antes de exportar, aseguramos que lo escrito en pantalla esté en memoria
+  registrosActuales.forEach((r, i) => Object.assign(r, leerCamposDelDom(i)));
+
+  generarPDFTabla({
+    registros: registrosActuales,
+    subtitulo: 'Docente: ' + docenteActivo,
+    incluirDocente: false,
+    nombreArchivo: 'Registro_' + docenteActivo.replace(/\s+/g, '_') + '.pdf'
+  });
+}
+
+// -------- Exportar PDF consolidado (solo Admin) --------
+async function exportarTodoAdmin() {
+  const clave = prompt('Ingresa la clave de administrador:');
+  if (clave === null) return; // canceló
+  if (!clave.trim()) { alert('Debes ingresar una clave.'); return; }
+
+  try {
+    const resp = await apiGet({ action: 'exportarTodo', clave: clave.trim() });
+    if (resp.error) {
+      alert(resp.error === 'Clave incorrecta' ? 'Clave incorrecta.' : resp.error);
+      return;
+    }
+    if (!Array.isArray(resp) || resp.length === 0) {
+      alert('No hay registros para exportar.');
+      return;
+    }
+    generarPDFTabla({
+      registros: resp,
+      subtitulo: 'Reporte consolidado — todos los docentes',
+      incluirDocente: true,
+      nombreArchivo: 'Registro_consolidado_' + new Date().toISOString().slice(0, 10) + '.pdf'
+    });
+  } catch (err) {
+    alert('No se pudo generar el reporte. Revisa tu conexión.');
+  }
+}
+
+// -------- Función común para generar la tabla del PDF --------
+function generarPDFTabla({ registros, subtitulo, incluirDocente, nombreArchivo }) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
+  const margen = 28;
+
+  const columnas = ['Curso', 'Estudiante'];
+  if (incluirDocente) columnas.push('Docente');
+  columnas.push(
+    'Asignatura', 'Mat.Rep', '2T', '1T', 'Reinc.',
+    'Dificultad académica', 'Acciones (dificultad)', 'Recomendaciones',
+    'Situación conductual', 'Acciones (conducta)', 'Observaciones'
+  );
+
+  const filas = registros.map(r => {
+    const fila = [r.curso ?? '-', r.estudiante ?? '-'];
+    if (incluirDocente) fila.push(r.docente ?? '-');
+    fila.push(
+      r.asignatura ?? '-',
+      r.matRep ?? '-',
+      r.nota2T ?? '-',
+      r.nota1T ?? '-',
+      r.reincide ?? '-',
+      r.dificultad || '-',
+      r.accionesDificultad || '-',
+      r.recomendaciones || '-',
+      r.situacionConductual || '-',
+      r.accionesConducta || '-',
+      r.observaciones || '-'
+    );
+    return fila;
+  });
+
+  const columnStylesBase = {
+    0: { cellWidth: 28, halign: 'center' }   // Curso
+  };
+  let siguiente = 1;
+  const anchoEstudiante = incluirDocente ? 60 : 72;
+  columnStylesBase[siguiente++] = { cellWidth: anchoEstudiante };        // Estudiante
+  if (incluirDocente) columnStylesBase[siguiente++] = { cellWidth: 65 }; // Docente
+  columnStylesBase[siguiente++] = { cellWidth: 50 };                     // Asignatura
+  columnStylesBase[siguiente++] = { cellWidth: 20, halign: 'center' };   // Mat.Rep
+  columnStylesBase[siguiente++] = { cellWidth: 18, halign: 'center' };   // 2T
+  columnStylesBase[siguiente++] = { cellWidth: 18, halign: 'center' };   // 1T
+  columnStylesBase[siguiente++] = { cellWidth: 22, halign: 'center' };   // Reincide
+  // columnas de texto restantes se reparten automáticamente el ancho sobrante
+
+  doc.autoTable({
+    head: [columnas],
+    body: filas,
+    margin: { left: margen, right: margen, top: 58 },
+    styles: {
+      font: 'helvetica',
+      fontSize: 7,
+      cellPadding: 3,
+      valign: 'top',
+      overflow: 'linebreak',
+      lineColor: [216, 222, 229],
+      lineWidth: 0.5
+    },
+    headStyles: {
+      fillColor: [30, 58, 95],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 7.5,
+      halign: 'center'
+    },
+    alternateRowStyles: { fillColor: [244, 246, 248] },
+    columnStyles: columnStylesBase,
+    didDrawPage: function () {
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(30, 58, 95);
+      doc.text('Registro de Dificultades Académicas y Conductuales', margen, 24);
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(90, 107, 122);
+      doc.text(subtitulo + '   •   Exportado: ' + new Date().toLocaleDateString('es-BO'), margen, 40);
+
+      const pagina = doc.internal.getCurrentPageInfo().pageNumber;
+      doc.setFontSize(8);
+      doc.text('Página ' + pagina, doc.internal.pageSize.getWidth() - margen - 40, doc.internal.pageSize.getHeight() - 12);
+    }
+  });
+
+  doc.save(nombreArchivo);
+}
+
+// -------- Utilidad --------
+function escaparHtml(texto) {
+  if (texto === null || texto === undefined) return '';
+  return String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Init
+cargarDocentes();
+</script>
+</body>
+</html>
