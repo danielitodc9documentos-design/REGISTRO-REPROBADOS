@@ -124,6 +124,42 @@
   .cargando{ text-align:center; padding:40px 0; color:#5a6b7a; }
   .vacio{ text-align:center; padding:30px; color:#5a6b7a; }
   footer{ text-align:center; padding:20px; font-size:.75rem; color:#8494a3; }
+
+  /* ---- Modal admin ---- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(20,28,38,.55);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:40px 16px; overflow-y:auto; z-index:50;
+  }
+  .modal{
+    background:#fff; border-radius:10px; max-width:720px; width:100%;
+    padding:22px; box-shadow:0 8px 30px rgba(0,0,0,.25);
+  }
+  .modal h2{ margin:0 0 4px; font-size:1.05rem; color:var(--azul); }
+  .modal .cerrar{
+    float:right; background:none; border:none; font-size:1.3rem;
+    cursor:pointer; color:#8494a3; line-height:1;
+  }
+  .estado-sistema-row{ display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 6px; }
+  .chip{
+    padding:7px 14px; border-radius:20px; border:1px solid var(--borde);
+    background:#fff; cursor:pointer; font-size:.82rem; font-weight:600; color:var(--texto);
+  }
+  .chip.activa{ background:var(--azul); color:#fff; border-color:var(--azul); }
+  .chip.activa.bloqueado{ background:var(--rojo); border-color:var(--rojo); }
+  .chip.activa.restringido{ background:#b8860b; border-color:#b8860b; }
+
+  table.tabla-docentes{ width:100%; border-collapse:collapse; margin-top:16px; font-size:.85rem; }
+  table.tabla-docentes th{ text-align:left; color:#5a6b7a; font-size:.72rem; text-transform:uppercase; padding:6px 8px; border-bottom:2px solid var(--borde); }
+  table.tabla-docentes td{ padding:7px 8px; border-bottom:1px solid var(--borde); vertical-align:middle; }
+  .toggle-btn{
+    border:1px solid var(--borde); background:#fff; border-radius:6px;
+    padding:4px 10px; font-size:.75rem; font-weight:600; cursor:pointer;
+  }
+  .toggle-btn.on-activo{ color:var(--verde); border-color:var(--verde); }
+  .toggle-btn.on-bloqueado{ color:var(--rojo); border-color:var(--rojo); }
+  .toggle-btn.on-si{ color:#b8860b; border-color:#b8860b; }
+  .admin-msg{ font-size:.82rem; margin-top:10px; min-height:16px; }
 </style>
 </head>
 <body>
@@ -176,8 +212,47 @@
   Los datos se guardan directamente en la planilla del colegio.
   <div style="margin-top:6px;">
     <a href="#" onclick="exportarTodoAdmin(); return false;" style="color:#8494a3;">Exportar todo (Admin)</a>
+    &nbsp;·&nbsp;
+    <a href="#" onclick="abrirPanelAdmin(); return false;" style="color:#8494a3;">Panel de administración</a>
   </div>
 </footer>
+
+<!-- MODAL: Panel de administración -->
+<div id="modalAdmin" class="modal-overlay oculto">
+  <div class="modal">
+    <button class="cerrar" onclick="cerrarPanelAdmin()">&times;</button>
+    <h2>Panel de administración</h2>
+    <div class="sub" style="font-size:.8rem;color:#5a6b7a;">Controla el acceso global al sistema y el acceso por docente</div>
+
+    <div id="adminLogin">
+      <label for="inputClaveAdmin">Clave de administrador</label>
+      <input type="password" id="inputClaveAdmin" inputmode="numeric" placeholder="Ingresa la clave admin">
+      <div style="margin-top:12px;">
+        <button class="btn" onclick="cargarPanelAdmin()">Ingresar</button>
+      </div>
+      <div id="adminLoginMsg" class="admin-msg error" style="color:var(--rojo);"></div>
+    </div>
+
+    <div id="adminPanelContenido" class="oculto">
+      <label>Estado del sistema</label>
+      <div class="estado-sistema-row">
+        <button class="chip" data-estado="activo" onclick="cambiarEstadoSistema('activo')">Activo</button>
+        <button class="chip" data-estado="restringido" onclick="cambiarEstadoSistema('restringido')">Restringido</button>
+        <button class="chip" data-estado="bloqueado" onclick="cambiarEstadoSistema('bloqueado')">Bloqueado</button>
+      </div>
+      <div style="font-size:.78rem;color:#5a6b7a;" id="explicacionEstado"></div>
+
+      <table class="tabla-docentes">
+        <thead>
+          <tr><th>Docente</th><th>Acceso</th><th>Excepción (modo restringido)</th></tr>
+        </thead>
+        <tbody id="tbodyDocentesAdmin"></tbody>
+      </table>
+
+      <div id="adminMsg" class="admin-msg"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -265,7 +340,7 @@ async function cargarRegistros() {
     document.getElementById('pasoDocente').classList.remove('oculto');
     errorEl.textContent = err.message === 'Clave incorrecta'
       ? 'Contraseña incorrecta.'
-      : 'No se pudo cargar la información. Revisa tu conexión.';
+      : (err.message || 'No se pudo cargar la información. Revisa tu conexión.');
   } finally {
     document.getElementById('cargando').classList.add('oculto');
   }
@@ -506,6 +581,137 @@ function escaparHtml(texto) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// -------- Panel de administración --------
+let claveAdminActiva = '';
+
+const EXPLICACION_ESTADO = {
+  activo: 'Todos los docentes pueden entrar, salvo los marcados como Bloqueado.',
+  restringido: 'Solo pueden entrar los docentes marcados como Excepción. El resto queda afuera.',
+  bloqueado: 'Nadie puede entrar, ni siquiera las excepciones.'
+};
+
+function abrirPanelAdmin() {
+  document.getElementById('modalAdmin').classList.remove('oculto');
+}
+
+function cerrarPanelAdmin() {
+  document.getElementById('modalAdmin').classList.add('oculto');
+  document.getElementById('adminLogin').classList.remove('oculto');
+  document.getElementById('adminPanelContenido').classList.add('oculto');
+  document.getElementById('inputClaveAdmin').value = '';
+  document.getElementById('adminLoginMsg').textContent = '';
+  claveAdminActiva = '';
+}
+
+async function cargarPanelAdmin() {
+  const clave = document.getElementById('inputClaveAdmin').value.trim();
+  const msgEl = document.getElementById('adminLoginMsg');
+  msgEl.textContent = '';
+  if (!clave) { msgEl.textContent = 'Ingresa la clave.'; return; }
+
+  try {
+    const resp = await apiGet({ action: 'admin_estado', clave });
+    if (resp.error) { msgEl.textContent = resp.error === 'Clave incorrecta' ? 'Clave incorrecta.' : resp.error; return; }
+
+    claveAdminActiva = clave;
+    document.getElementById('adminLogin').classList.add('oculto');
+    document.getElementById('adminPanelContenido').classList.remove('oculto');
+    pintarEstadoSistema(resp.estadoSistema);
+    pintarTablaDocentes(resp.docentes);
+  } catch (err) {
+    msgEl.textContent = 'No se pudo conectar. Revisa tu conexión.';
+  }
+}
+
+function pintarEstadoSistema(estado) {
+  document.querySelectorAll('.chip').forEach(chip => {
+    const esActivo = chip.dataset.estado === estado;
+    chip.classList.toggle('activa', esActivo);
+    chip.classList.toggle(estado, esActivo);
+  });
+  document.getElementById('explicacionEstado').textContent = EXPLICACION_ESTADO[estado] || '';
+}
+
+async function cambiarEstadoSistema(nuevoEstado) {
+  const msgEl = document.getElementById('adminMsg');
+  msgEl.textContent = 'Guardando...';
+  msgEl.className = 'admin-msg';
+  try {
+    const resp = await apiPost({ action: 'admin_setEstadoSistema', clave: claveAdminActiva, estado: nuevoEstado });
+    if (resp.error) throw new Error(resp.error);
+    pintarEstadoSistema(resp.estadoSistema);
+    msgEl.textContent = 'Estado del sistema actualizado ✓';
+    msgEl.style.color = 'var(--verde)';
+  } catch (err) {
+    msgEl.textContent = 'Error: ' + err.message;
+    msgEl.style.color = 'var(--rojo)';
+  }
+}
+
+function pintarTablaDocentes(docentes) {
+  const tbody = document.getElementById('tbodyDocentesAdmin');
+  if (!docentes || docentes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3">No hay docentes registrados en la pestaña Docentes.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = docentes.map(d => `
+    <tr>
+      <td>${escaparHtml(d.docente)}</td>
+      <td>
+        <button class="toggle-btn ${d.estado === 'Bloqueado' ? 'on-bloqueado' : 'on-activo'}"
+          onclick="toggleEstadoDocente('${escaparAtributo(d.docente)}', '${d.estado}')">
+          ${d.estado === 'Bloqueado' ? 'Bloqueado — habilitar' : 'Activo — bloquear'}
+        </button>
+      </td>
+      <td>
+        <button class="toggle-btn ${d.excepcion ? 'on-si' : ''}"
+          onclick="toggleExcepcion('${escaparAtributo(d.docente)}', ${d.excepcion})">
+          ${d.excepcion ? 'Excepción: SI' : 'Excepción: NO'}
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+async function toggleEstadoDocente(docente, estadoActual) {
+  const nuevoEstado = estadoActual === 'Bloqueado' ? 'Activo' : 'Bloqueado';
+  const msgEl = document.getElementById('adminMsg');
+  msgEl.textContent = 'Guardando...';
+  msgEl.className = 'admin-msg';
+  try {
+    const resp = await apiPost({ action: 'admin_setEstadoDocente', clave: claveAdminActiva, docente, estado: nuevoEstado });
+    if (resp.error) throw new Error(resp.error);
+    const estadoResp = await apiGet({ action: 'admin_estado', clave: claveAdminActiva });
+    pintarTablaDocentes(estadoResp.docentes);
+    msgEl.textContent = 'Guardado ✓';
+    msgEl.style.color = 'var(--verde)';
+  } catch (err) {
+    msgEl.textContent = 'Error: ' + err.message;
+    msgEl.style.color = 'var(--rojo)';
+  }
+}
+
+async function toggleExcepcion(docente, excepcionActual) {
+  const nuevaExcepcion = excepcionActual ? 'NO' : 'SI';
+  const msgEl = document.getElementById('adminMsg');
+  msgEl.textContent = 'Guardando...';
+  msgEl.className = 'admin-msg';
+  try {
+    const resp = await apiPost({ action: 'admin_setExcepcion', clave: claveAdminActiva, docente, excepcion: nuevaExcepcion });
+    if (resp.error) throw new Error(resp.error);
+    const estadoResp = await apiGet({ action: 'admin_estado', clave: claveAdminActiva });
+    pintarTablaDocentes(estadoResp.docentes);
+    msgEl.textContent = 'Guardado ✓';
+    msgEl.style.color = 'var(--verde)';
+  } catch (err) {
+    msgEl.textContent = 'Error: ' + err.message;
+    msgEl.style.color = 'var(--rojo)';
+  }
+}
+
+function escaparAtributo(texto) {
+  return String(texto).replace(/'/g, "\\'");
 }
 
 // Init
